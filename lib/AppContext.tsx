@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserStats, Habit, HabitWithStats, FeedPost, Friend, Challenge, ChallengeProgress } from '@/lib/types';
+import { User, UserStats, Habit, HabitWithStats, FeedPost, Friend, Challenge, ChallengeProgress, HABIT_ICONS, HABIT_COLORS } from '@/lib/types';
 import { mockUser, mockUserStats, mockHabits, mockFeedPosts, mockFriends, mockChallenges } from '@/lib/mockData';
+import { supabase } from '@/lib/supabase';
 
 interface AppState {
     user: User | null;
@@ -18,7 +19,7 @@ interface AppState {
 interface AppContextType extends AppState {
     // User actions
     login: (email: string, password: string) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
     updateUser: (updates: Partial<User>) => void;
 
     // Habit actions
@@ -53,18 +54,30 @@ export function AppProvider({ children }: AppProviderProps) {
         isLoading: true,
     });
 
-    // Load initial data (mock data for MVP)
+    // Check active session and listen for auth changes
     useEffect(() => {
-        const loadData = async () => {
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, 500));
+        const initializeAuth = async () => {
+            // Check current session
+            const { data: { session } } = await supabase.auth.getSession();
 
-            // Check if user is "logged in" (stored in localStorage)
-            const isLoggedIn = localStorage.getItem('consistency-logged-in');
+            if (session?.user) {
+                // Map Supabase user to app User type
+                // In a real app we would fetch profile from 'profiles' table here
+                const user: User = {
+                    id: session.user.id,
+                    email: session.user.email || '',
+                    username: session.user.email?.split('@')[0] || 'nomad',
+                    displayName: session.user.user_metadata?.full_name || 'Nomad User',
+                    avatar: session.user.user_metadata?.avatar_url,
+                    theme: 'cyberpunk', // Default or from db
+                    createdAt: new Date(session.user.created_at),
+                    updatedAt: new Date(),
+                };
 
-            if (isLoggedIn === 'true') {
+                // For MVP, we still use mock data for stats/habits if real DB is empty
+                // But we use the REAL user object
                 setState({
-                    user: mockUser,
+                    user,
                     userStats: mockUserStats,
                     habits: mockHabits,
                     feedPosts: mockFeedPosts,
@@ -74,43 +87,60 @@ export function AppProvider({ children }: AppProviderProps) {
                     isLoading: false,
                 });
             } else {
-                setState(prev => ({ ...prev, isLoading: false }));
+                setState(prev => ({ ...prev, user: null, isLoading: false }));
             }
         };
 
-        loadData();
+        initializeAuth();
+
+        // Listen for changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session?.user) {
+                const user: User = {
+                    id: session.user.id,
+                    email: session.user.email || '',
+                    username: session.user.email?.split('@')[0] || 'nomad',
+                    displayName: session.user.user_metadata?.full_name || 'Nomad User',
+                    avatar: session.user.user_metadata?.avatar_url,
+                    theme: 'cyberpunk',
+                    createdAt: new Date(session.user.created_at),
+                    updatedAt: new Date(),
+                };
+
+                setState(prev => ({
+                    ...prev,
+                    user,
+                    // Restore data if logging in
+                    userStats: prev.userStats || mockUserStats,
+                    habits: prev.habits.length ? prev.habits : mockHabits,
+                    feedPosts: prev.feedPosts.length ? prev.feedPosts : mockFeedPosts,
+                    isLoading: false,
+                }));
+            } else {
+                setState(prev => ({
+                    ...prev,
+                    user: null,
+                    userStats: null,
+                    habits: [],
+                    isLoading: false
+                }));
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     // User actions
     const login = async (email: string, password: string) => {
-        // Mock login - in production, this would call an API
-        await new Promise(resolve => setTimeout(resolve, 800));
-        localStorage.setItem('consistency-logged-in', 'true');
-
-        setState({
-            user: mockUser,
-            userStats: mockUserStats,
-            habits: mockHabits,
-            feedPosts: mockFeedPosts,
-            friends: mockFriends,
-            challenges: mockChallenges,
-            challengeProgress: new Map(),
-            isLoading: false,
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
         });
+        if (error) throw error;
     };
 
-    const logout = () => {
-        localStorage.removeItem('consistency-logged-in');
-        setState({
-            user: null,
-            userStats: null,
-            habits: [],
-            feedPosts: [],
-            friends: [],
-            challenges: [],
-            challengeProgress: new Map(),
-            isLoading: false,
-        });
+    const logout = async () => {
+        await supabase.auth.signOut();
     };
 
     const updateUser = (updates: Partial<User>) => {
@@ -120,7 +150,7 @@ export function AppProvider({ children }: AppProviderProps) {
         }));
     };
 
-    // Habit actions
+    // Habit actions (Kept same for now, just operating on local state)
     const addHabit = (habitData: Omit<Habit, 'id' | 'userId' | 'createdAt'>) => {
         const newHabit: HabitWithStats = {
             ...habitData,
@@ -166,7 +196,6 @@ export function AppProvider({ children }: AppProviderProps) {
                 return habit;
             });
 
-            // Update user stats
             const userStats = prev.userStats ? {
                 ...prev.userStats,
                 totalPoints: prev.userStats.totalPoints + 10,
@@ -208,7 +237,6 @@ export function AppProvider({ children }: AppProviderProps) {
     };
 
     const addFriend = (friendId: string) => {
-        // In production, this would trigger a friend request
         console.log('Friend request sent to:', friendId);
     };
 

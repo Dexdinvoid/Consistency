@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useApp } from '@/lib/AppContext';
 import styles from './page.module.css';
 
@@ -10,32 +11,31 @@ export default function LoginPage() {
     const router = useRouter();
     const { login } = useApp();
     const [isLoading, setIsLoading] = useState(false);
-    const [isSignup, setIsSignup] = useState(false);
+    const [error, setError] = useState('');
     const [formData, setFormData] = useState({
         email: '',
         password: '',
-        username: '',
     });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError('');
 
         try {
             await login(formData.email, formData.password);
             router.push('/');
-        } catch (error) {
-            console.error('Login failed:', error);
+        } catch (err: any) {
+            console.error('Login failed:', err);
+            setError(err.message || 'Invalid login credentials');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleOAuthLogin = async (provider: string) => {
-        setIsLoading(true);
-        // Mock OAuth login
-        await login('demo@consistency.gg', 'demo');
-        router.push('/');
+    const handleOAuthLogin = (provider: string) => {
+        // For MVP, social auth requires backend config
+        alert(`Please configure ${provider} auth in your Supabase dashboard to enable this.`);
     };
 
     return (
@@ -64,17 +64,30 @@ export default function LoginPage() {
                         ✦
                     </motion.div>
                     <h1 className={styles.title}>Consistency</h1>
-                    <p className={styles.subtitle}>
-                        {isSignup ? 'Create your account' : 'Welcome back, warrior'}
-                    </p>
+                    <p className={styles.subtitle}>Welcome back, warrior</p>
                 </div>
+
+                {error && (
+                    <div style={{
+                        color: '#ef4444',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        fontSize: '14px',
+                        textAlign: 'center'
+                    }}>
+                        {error}
+                    </div>
+                )}
 
                 {/* OAuth Buttons */}
                 <div className={styles.oauthButtons}>
                     <button
                         className={styles.oauthButton}
-                        onClick={() => handleOAuthLogin('google')}
+                        onClick={() => handleOAuthLogin('Google')}
                         disabled={isLoading}
+                        type="button"
                     >
                         <svg viewBox="0 0 24 24" width="20" height="20">
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -86,8 +99,9 @@ export default function LoginPage() {
                     </button>
                     <button
                         className={styles.oauthButton}
-                        onClick={() => handleOAuthLogin('apple')}
+                        onClick={() => handleOAuthLogin('Apple')}
                         disabled={isLoading}
+                        type="button"
                     >
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                             <path d="M17.05 20.28c-.98.95-2.05.88-3.08.38-1.09-.52-2.08-.54-3.23 0-1.44.69-2.2.5-3.08-.38C3.17 15.57 3.75 8.75 8.77 8.48c1.35.07 2.29.74 3.08.79 1.18-.24 2.31-.93 3.56-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.24 3.92zM12.03 8.41c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
@@ -102,20 +116,6 @@ export default function LoginPage() {
 
                 {/* Email Form */}
                 <form onSubmit={handleSubmit} className={styles.form}>
-                    {isSignup && (
-                        <div className={styles.inputGroup}>
-                            <label className={styles.label}>Username</label>
-                            <input
-                                type="text"
-                                className={styles.input}
-                                placeholder="Choose a username"
-                                value={formData.username}
-                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                required={isSignup}
-                            />
-                        </div>
-                    )}
-
                     <div className={styles.inputGroup}>
                         <label className={styles.label}>Email</label>
                         <input
@@ -149,30 +149,21 @@ export default function LoginPage() {
                     >
                         {isLoading ? (
                             <span className={styles.loadingSpinner} />
-                        ) : isSignup ? (
-                            'Create Account'
                         ) : (
                             'Sign In'
                         )}
                     </motion.button>
                 </form>
 
-                {/* Toggle */}
-                <p className={styles.toggle}>
-                    {isSignup ? 'Already have an account?' : "Don't have an account?"}
-                    <button
-                        type="button"
-                        className={styles.toggleButton}
-                        onClick={() => setIsSignup(!isSignup)}
-                    >
-                        {isSignup ? 'Sign In' : 'Sign Up'}
-                    </button>
-                </p>
-
-                {/* Demo Notice */}
-                <p className={styles.demo}>
-                    💡 Demo: Click any button to enter the app
-                </p>
+                {/* Footer */}
+                <div className={styles.footer}>
+                    <p className={styles.footerText}>
+                        Don't have an account?{' '}
+                        <Link href="/signup" className={styles.link}>
+                            Sign Up
+                        </Link>
+                    </p>
+                </div>
             </motion.div>
         </div>
     );
